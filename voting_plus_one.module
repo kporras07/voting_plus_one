@@ -1,0 +1,196 @@
+<?php
+
+/**
+ * @file
+ * Main file for plus one style voting module.
+ */
+
+/**
+ * Implements hook_field_info().
+ */
+function voting_plus_one_field_info() {
+  return array(
+    'voting_plus_one' => array(
+      'label' => t('Voting Plus One Style'),
+      'description' => t('This field stores votes count for a given entity'),
+      'settings' => array(),
+      'default_widget' => 'voting_plus_one',
+      'default_formatter' => 'voting_plus_one',
+    ),
+  );
+}
+
+/**
+ * Implements hook_field_validate().
+ */
+function voting_plus_one_field_validate($entity_type, $entity, $field, $instance, $langcode, $items, &$errors) {
+}
+
+/**
+ * Implements hook_field_is_empty().
+ */
+function voting_plus_one_field_is_empty($item, $field) {
+  $columns = array_keys($field['columns']);
+  foreach ($columns as $column) {
+    if (!isset($item[$column]) || !$item[$column]) {
+      return TRUE;
+    }
+  }
+  return FALSE;
+}
+
+/**
+ * Implements hook_field_widget_info().
+ */
+function voting_plus_one_field_widget_info() {
+  return array(
+    'voting_plus_one' => array(
+      'label' => t('Voting Plus One Style'),
+      'field types' => array('voting_plus_one'),
+      'settings' => array(
+        'voting_plus_one_undo_votes' => 0,
+      ),
+    ),
+  );
+}
+
+/**
+ * Implements hook_field_widget_settings_form().
+ */
+function voting_plus_one_field_widget_settings_form($field, $instance) {
+  $widget = $instance['widget'];
+  $settings = $widget['settings'];
+
+  $form['voting_plus_one_undo_votes'] = array(
+    '#type' => 'radios',
+    '#title' => t('Allow a user for undoing his/her vote?'),
+    '#default_value' => $settings['voting_plus_one_undo_votes'],
+    '#options' => array(0 => t('No'), 1 => t('Yes')),
+  );
+
+  return $form;
+}
+
+/**
+ * Implements hook_field_widget_form().
+ */
+function voting_plus_one_field_widget_form(&$form, &$form_state, $field, $instance, $langcode, $items, $delta, $element) {
+
+  $element['votes'] = array(
+    '#title' => t('Votes'),
+    '#type' => 'textfield',
+    '#default_value' => 0,
+  );
+
+  return $element;
+}
+
+/**
+ * Implements hook_field_formatter_info().
+ */
+function voting_plus_one_field_formatter_info() {
+  return array(
+    'voting_plus_one' => array(
+      'label' => t('Voting Plus One Style'),
+      'field types' => array('voting_plus_one'),
+    ),
+  );
+}
+
+/**
+ * Implements hook_field_formatter_view().
+ */
+function voting_plus_one_field_formatter_view($entity_type, $entity, $field, $instance, $langcode, $items, $display) {
+  $element = array();
+  foreach ($items as $delta => $item) {
+    $form = drupal_get_form('voting_plus_one_get_voting_form', $entity_type, $entity, $field, $instance, $items, $delta);
+    $element[$delta] = array(
+      '#type' => 'markup',
+      '#markup' => drupal_render($form),
+    );
+  }
+  return $element;
+}
+
+/**
+ * Implements hook_permission().
+ */
+function voting_plus_one_permission() {
+  return array(
+    'vote using plus one voting style' => array(
+      'title' => t('Vote using plus one voting style'),
+      'description' => t('Allow a user to use voting plus one.'),
+    ),
+  );
+}
+
+/**
+ * Returns voting form for a given entity.
+ */
+function voting_plus_one_get_voting_form($form, $form_state, $entity_type, $entity, $field, $instance, $items, $delta) {
+  if (user_access('vote using plus one voting style')) {
+    $form['entity_type'] = array(
+      '#type' => 'value',
+      '#value' => $entity_type,
+    );
+    $form['entity'] = array(
+      '#type' => 'value',
+      '#value' => $entity,
+    );
+    $form['field'] = array(
+      '#type' => 'value',
+      '#value' => $field,
+    );
+    $form['instance'] = array(
+      '#type' => 'value',
+      '#value' => $instance,
+    );
+    $form['items'] = array(
+      '#type' => 'value',
+      '#value' => $items,
+    );
+    $form['delta'] = array(
+      '#type' => 'value',
+      '#value' => $delta,
+    );
+    // @TODO change by format_plural
+    $form['actual_votes'] = array(
+      '#type' => 'markup',
+      '#markup' => t('@number votes', array('@number' => $items[$delta]['votes'])),
+    );
+    $form['vote'] = array(
+      '#type' => 'submit',
+      '#value' => variable_get('voting_plus_one_vote_text', t('Vote')),
+      '#ajax' => array(
+        'callback' => 'voting_plus_one_applied_vote',
+        'wrapper' => 'voting-plus-one-vote',
+        'method' => 'replace'
+      ),
+      '#prefix' => '<div id="voting-plus-one-vote">',
+      '#suffix' => '</div>',
+    );
+    $form['#submit'][] = 'voting_plus_one_get_voting_form_submit';
+  }
+  else {
+    $form['not_allowed'] = array(
+      '#type' => 'markup',
+      '#markup' => variable_get('voting_plus_one_not_allowed_markup', t('You are not allowed to vote')),
+    );
+  }
+  dpm($form, 'FORM');
+  return $form;
+}
+
+/**
+ * Ajax callback when a vote has been applied.
+ */
+function voting_plus_one_applied_vote($form, $form_state) {
+  return t('Thanks for Voting');
+}
+
+/**
+ * Submit for voting form.
+ */
+function voting_plus_one_get_voting_form_submit($form, $form_state) {
+  dpm($form,  'FORM');
+}
