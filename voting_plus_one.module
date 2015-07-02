@@ -101,6 +101,15 @@ function voting_plus_one_permission() {
 }
 
 /**
+ * Implements hook_form_field_ui_field_edit_form_alter().
+ */
+function voting_plus_one_form_field_ui_field_edit_form_alter(&$form, &$form_state, $form_id) {
+  if ($form['#field']['type'] == 'voting_plus_one') {
+    $form['field']['cardinality']['#options'] = array(1);
+  }
+}
+
+/**
  * Returns voting form for a given entity.
  */
 function voting_plus_one_get_voting_form($form, $form_state, $entity_type, $entity, $field) {
