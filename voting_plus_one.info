@@ -1,4 +1,4 @@
 name = Voting Plus One
 description = Provides a plus one style voting system.
-dependencies = votingapi
+dependencies[] = votingapi
 core = 7.x
