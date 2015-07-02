@@ -16,14 +16,9 @@ function voting_plus_one_field_info() {
       'settings' => array(),
       'default_widget' => 'voting_plus_one',
       'default_formatter' => 'voting_plus_one',
+      'property_type' => 'integer',
     ),
   );
-}
-
-/**
- * Implements hook_field_validate().
- */
-function voting_plus_one_field_validate($entity_type, $entity, $field, $instance, $langcode, $items, &$errors) {
 }
 
 /**
@@ -32,7 +27,7 @@ function voting_plus_one_field_validate($entity_type, $entity, $field, $instance
 function voting_plus_one_field_is_empty($item, $field) {
   $columns = array_keys($field['columns']);
   foreach ($columns as $column) {
-    if (!isset($item[$column]) || !$item[$column]) {
+    if (!isset($item[$column])) {
       return TRUE;
     }
   }
@@ -47,28 +42,9 @@ function voting_plus_one_field_widget_info() {
     'voting_plus_one' => array(
       'label' => t('Voting Plus One Style'),
       'field types' => array('voting_plus_one'),
-      'settings' => array(
-        'voting_plus_one_undo_votes' => 0,
-      ),
+      'settings' => array(),
     ),
   );
-}
-
-/**
- * Implements hook_field_widget_settings_form().
- */
-function voting_plus_one_field_widget_settings_form($field, $instance) {
-  $widget = $instance['widget'];
-  $settings = $widget['settings'];
-
-  $form['voting_plus_one_undo_votes'] = array(
-    '#type' => 'radios',
-    '#title' => t('Allow a user for undoing his/her vote?'),
-    '#default_value' => $settings['voting_plus_one_undo_votes'],
-    '#options' => array(0 => t('No'), 1 => t('Yes')),
-  );
-
-  return $form;
 }
 
 /**
@@ -103,7 +79,7 @@ function voting_plus_one_field_formatter_info() {
 function voting_plus_one_field_formatter_view($entity_type, $entity, $field, $instance, $langcode, $items, $display) {
   $element = array();
   foreach ($items as $delta => $item) {
-    $form = drupal_get_form('voting_plus_one_get_voting_form', $entity_type, $entity, $field, $instance, $items, $delta);
+    $form = drupal_get_form('voting_plus_one_get_voting_form', $entity_type, $entity, $field);
     $element[$delta] = array(
       '#type' => 'markup',
       '#markup' => drupal_render($form),
@@ -127,49 +103,46 @@ function voting_plus_one_permission() {
 /**
  * Returns voting form for a given entity.
  */
-function voting_plus_one_get_voting_form($form, $form_state, $entity_type, $entity, $field, $instance, $items, $delta) {
-  if (user_access('vote using plus one voting style')) {
+function voting_plus_one_get_voting_form($form, $form_state, $entity_type, $entity, $field) {
+  $ewrapper = entity_metadata_wrapper($entity_type, $entity);
+  if (user_access('vote using plus one voting style') && !voting_plus_one_user_has_voted_in_entity($entity_type, $ewrapper->getIdentifier())) {
     $form['entity_type'] = array(
       '#type' => 'value',
       '#value' => $entity_type,
     );
     $form['entity'] = array(
       '#type' => 'value',
-      '#value' => $entity,
+      '#value' => $ewrapper,
     );
     $form['field'] = array(
       '#type' => 'value',
       '#value' => $field,
     );
-    $form['instance'] = array(
-      '#type' => 'value',
-      '#value' => $instance,
-    );
-    $form['items'] = array(
-      '#type' => 'value',
-      '#value' => $items,
-    );
-    $form['delta'] = array(
-      '#type' => 'value',
-      '#value' => $delta,
-    );
-    // @TODO change by format_plural
-    $form['actual_votes'] = array(
-      '#type' => 'markup',
-      '#markup' => t('@number votes', array('@number' => $items[$delta]['votes'])),
-    );
-    $form['vote'] = array(
-      '#type' => 'submit',
-      '#value' => variable_get('voting_plus_one_vote_text', t('Vote')),
-      '#ajax' => array(
-        'callback' => 'voting_plus_one_applied_vote',
-        'wrapper' => 'voting-plus-one-vote',
-        'method' => 'replace'
-      ),
-      '#prefix' => '<div id="voting-plus-one-vote">',
+    $form['voting'] = array(
+      '#type' => 'container',
+      '#prefix' => '<div id="voting-plus-one">',
       '#suffix' => '</div>',
     );
-    $form['#submit'][] = 'voting_plus_one_get_voting_form_submit';
+    $form['voting']['actual_votes'] = array(
+      '#type' => 'markup',
+      '#markup' => voting_plus_one_get_vote_count_markup($entity_type, $ewrapper->getIdentifier()),
+    );
+    $form['voting']['vote'] = array(
+      '#type' => 'submit',
+      '#value' => variable_get('voting_plus_one_vote_text', t('Vote proposal')),
+      '#ajax' => array(
+        'callback' => 'voting_plus_one_applied_vote',
+        'wrapper' => 'voting-plus-one',
+        'method' => 'replace',
+      ),
+      '#submit' => array('voting_plus_one_get_voting_form_submit'),
+    );
+  }
+  elseif (voting_plus_one_user_has_voted_in_entity($entity_type, $ewrapper->getIdentifier())) {
+    $form['actual_votes'] = array(
+      '#type' => 'markup',
+      '#markup' => voting_plus_one_get_vote_count_markup($entity_type, $ewrapper->getIdentifier()),
+    );
   }
   else {
     $form['not_allowed'] = array(
@@ -177,20 +150,77 @@ function voting_plus_one_get_voting_form($form, $form_state, $entity_type, $enti
       '#markup' => variable_get('voting_plus_one_not_allowed_markup', t('You are not allowed to vote')),
     );
   }
-  dpm($form, 'FORM');
   return $form;
+}
+
+/**
+ * Returns vote count markup.
+ */
+function voting_plus_one_get_vote_count_markup($entity_type, $entity_id) {
+  $criteria = array(
+    'entity_id' => $entity_id,
+    'entity_type' => $entity_type,
+    'value_type' => 'points',
+  );
+  $votes = votingapi_select_votes($criteria);
+  $count = count($votes);
+  $markup = '<div class="voting-plusone-count"><span class="quantity">' . $count . '</span><span>' . format_plural($count, 'Vote', 'Votes', array(), array('context' => 'voting-singular-plural')) . '</span></div>';
+  return $markup;
+}
+
+/**
+ * Returns wheter a user has voted or not in a given entity.
+ */
+function voting_plus_one_user_has_voted_in_entity($entity_type, $entity_id, $uid = 0) {
+  if (!$uid) {
+    global $user;
+    $uid = $user->uid;
+  }
+  $criteria = array(
+    'entity_id' => $entity_id,
+    'entity_type' => $entity_type,
+    'uid' => $uid,
+    'value_type' => 'points',
+  );
+  $votes = votingapi_select_votes($criteria, 1);
+  if (count($votes)) {
+    return TRUE;
+  }
+  else {
+    return FALSE;
+  }
 }
 
 /**
  * Ajax callback when a vote has been applied.
  */
 function voting_plus_one_applied_vote($form, $form_state) {
-  return t('Thanks for Voting');
+  $values = $form_state['values'];
+  $entity_type = $values['entity_type'];
+  $ewrapper = $values['entity'];
+  $markup = voting_plus_one_get_vote_count_markup($entity_type, $ewrapper->getIdentifier());
+  return $markup;
 }
 
 /**
  * Submit for voting form.
  */
 function voting_plus_one_get_voting_form_submit($form, $form_state) {
-  dpm($form,  'FORM');
+  global $user;
+  $values = $form_state['values'];
+  $entity_type = $values['entity_type'];
+  $ewrapper = $values['entity'];
+  $field = $values['field'];
+  $vote = array(
+    'entity_type' => $entity_type,
+    'entity_id' => $ewrapper->getIdentifier(),
+    'value_type' => 'points',
+    'value' => 1,
+  );
+  $votes[] = $vote;
+  $criteria = array();
+  $result = votingapi_set_votes($votes, $criteria);
+  $actual = $result[$entity_type][$ewrapper->getIdentifier()][0]['value'];
+  $ewrapper->$field['field_name']->set($actual);
+  $ewrapper->save();
 }
