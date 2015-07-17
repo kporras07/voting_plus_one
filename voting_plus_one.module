@@ -55,7 +55,7 @@ function voting_plus_one_field_widget_form(&$form, &$form_state, $field, $instan
   $element['votes'] = array(
     '#title' => t('Votes'),
     '#type' => 'textfield',
-    '#default_value' => $items[$delta]['votes'],
+    '#default_value' => isset($items[$delta]['votes']) ? $items[$delta]['votes'] : 0,
     '#disabled' => TRUE,
   );
 
