@@ -70,8 +70,70 @@ function voting_plus_one_field_formatter_info() {
     'voting_plus_one' => array(
       'label' => t('Voting Plus One Style'),
       'field types' => array('voting_plus_one'),
+      'settings' => array(
+        'vote_text' => t('Vote'),
+        'not_allowed_text' => t('You are not allowed to vote'),
+      ),
     ),
   );
+}
+
+/**
+ * Implements hook_field_formatter_settings_form().
+ */
+function voting_plus_one_field_formatter_settings_form($form, $instance, $view_mode, $form, &$form_state) {
+  $display = $instance['display'][$view_mode];
+  $settings = $display['settings'];
+
+  $element['vote_text'] = array(
+    '#title' => t('Vote text'),
+    '#type' => 'textfield',
+    '#default_value' => $settings['vote_text'],
+    '#element_validate' => array('voting_plus_one_field_formatter_settings_vote_text_validate'),
+    '#required' => TRUE,
+  );
+
+  $element['not_allowed_text'] = array(
+    '#title' => t('Text for displaying when an user is not allowed to vote'),
+    '#type' => 'textfield',
+    '#default_value' => $settings['not_allowed_text'],
+    '#element_validate' => array('voting_plus_one_field_formatter_settings_not_allowed_text_validate'),
+    '#required' => TRUE,
+  );
+
+  return $element;
+}
+
+/**
+ * Element validate for saving vote_text value translatable string.
+ */
+function voting_plus_one_field_formatter_settings_vote_text_validate($form, $form_state) {
+  if (module_exists('i18n_string')) {
+    i18n_string('voting_plus_one:vote_text', check_plain($form['#value']), array('update' => TRUE));
+  }
+}
+
+/**
+ * Element validate for saving not_allowed_text value translatable string.
+ */
+function voting_plus_one_field_formatter_settings_not_allowed_text_validate($form, $form_state) {
+  if (module_exists('i18n_string')) {
+    i18n_string('voting_plus_one:not_allowed_text', check_plain($form['#value']), array('update' => TRUE));
+  }
+}
+
+/**
+ * Implements hook_field_formatter_settings_summary().
+ */
+function voting_plus_one_field_formatter_settings_summary($field, $instance, $view_mode) {
+  $display = $instance['display'][$view_mode];
+  $settings = $display['settings'];
+
+  $summary = array();
+  $summary[] = t('Vote Text: @vote_text', array('@vote_text' => $settings['vote_text']));
+  $summary[] = t('Not Allowed Text: @not_allowed_text', array('@not_allowed_text' => $settings['not_allowed_text']));
+
+  return implode('<br />', $summary);
 }
 
 /**
@@ -79,8 +141,9 @@ function voting_plus_one_field_formatter_info() {
  */
 function voting_plus_one_field_formatter_view($entity_type, $entity, $field, $instance, $langcode, $items, $display) {
   $element = array();
+  $settings = $display['settings'];
   foreach ($items as $delta => $item) {
-    $form = drupal_get_form('voting_plus_one_get_voting_form', $entity_type, $entity, $field);
+    $form = drupal_get_form('voting_plus_one_get_voting_form', $entity_type, $entity, $field, $settings);
     $element[$delta] = array(
       '#type' => 'markup',
       '#markup' => drupal_render($form),
@@ -111,9 +174,22 @@ function voting_plus_one_form_field_ui_field_edit_form_alter(&$form, &$form_stat
 }
 
 /**
+ * Implements hook_i18n_string_info().
+ */
+function voting_plus_one_i18n_string_info() {
+  $groups['voting_plus_one'] = array(
+    'title' => 'Voting Plus One translations',
+    'description' => 'Translatable options for Voting Plus One',
+    'format' => FALSE,
+    'list' => FALSE,
+  );
+  return $groups;
+}
+
+/**
  * Returns voting form for a given entity.
  */
-function voting_plus_one_get_voting_form($form, $form_state, $entity_type, $entity, $field) {
+function voting_plus_one_get_voting_form($form, $form_state, $entity_type, $entity, $field, $settings) {
   $ewrapper = entity_metadata_wrapper($entity_type, $entity);
   if (user_access('vote using plus one voting style') && !voting_plus_one_user_has_voted_in_entity($entity_type, $ewrapper->getIdentifier())) {
     $form['entity_type'] = array(
@@ -139,7 +215,7 @@ function voting_plus_one_get_voting_form($form, $form_state, $entity_type, $enti
     );
     $form['voting']['vote'] = array(
       '#type' => 'submit',
-      '#value' => variable_get('voting_plus_one_vote_text', t('Vote proposal')),
+      '#value' => check_plain($settings['vote_text']),
       '#ajax' => array(
         'callback' => 'voting_plus_one_applied_vote',
         'wrapper' => 'voting-plus-one',
@@ -156,7 +232,7 @@ function voting_plus_one_get_voting_form($form, $form_state, $entity_type, $enti
     if (!user_access('vote using plus one voting style')) {
       $form['not_allowed'] = array(
         '#type' => 'markup',
-        '#markup' => variable_get('voting_plus_one_not_allowed_markup', t('You are not allowed to vote')),
+        '#markup' => filter_xss($settings['not_allowed_text']),
       );
     }
   }
