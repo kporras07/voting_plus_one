@@ -147,17 +147,17 @@ function voting_plus_one_get_voting_form($form, $form_state, $entity_type, $enti
       '#submit' => array('voting_plus_one_get_voting_form_submit'),
     );
   }
-  elseif (voting_plus_one_user_has_voted_in_entity($entity_type, $ewrapper->getIdentifier())) {
+  else {
     $form['actual_votes'] = array(
       '#type' => 'markup',
       '#markup' => voting_plus_one_get_vote_count_markup($entity_type, $ewrapper->getIdentifier()),
     );
-  }
-  else {
-    $form['not_allowed'] = array(
-      '#type' => 'markup',
-      '#markup' => variable_get('voting_plus_one_not_allowed_markup', t('You are not allowed to vote')),
-    );
+    if (!user_access('vote using plus one voting style')) {
+      $form['not_allowed'] = array(
+        '#type' => 'markup',
+        '#markup' => variable_get('voting_plus_one_not_allowed_markup', t('You are not allowed to vote')),
+      );
+    }
   }
   return $form;
 }
