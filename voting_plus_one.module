@@ -105,7 +105,7 @@ function voting_plus_one_permission() {
  */
 function voting_plus_one_form_field_ui_field_edit_form_alter(&$form, &$form_state, $form_id) {
   if ($form['#field']['type'] == 'voting_plus_one') {
-    $form['field']['cardinality']['#options'] = array(1);
+    $form['field']['cardinality']['#options'] = array(1 => 1);
   }
 }
 
